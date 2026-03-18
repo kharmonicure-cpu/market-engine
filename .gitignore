@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Mac
+.DS_Store
+
+# venv
+.venv/
+env/
+
+# logs
+logs/
+
+# data (선택)
+# data/
