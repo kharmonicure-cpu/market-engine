@@ -581,6 +581,7 @@ def run_analysis(execute: bool = False) -> dict:
         "foreign_flow": market["foreign_flow"],
         "institution_flow": market["institution_flow"],
         "summary": summary,
+        print("test")
     }
 
     append_csv_row("reports/history.csv", csv_row)
