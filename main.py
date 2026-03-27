@@ -6,9 +6,8 @@ from collections import Counter
 
 from src.risk_engine import filter_orders_by_risk
 from src.execution_engine import execute_orders, save_trade_log
+from src.config import TOTAL_CAPITAL, POSITION_RATIO, MODE
 
-TOTAL_CAPITAL = 4_400_000
-POSITION_RATIO = 0.2
 
 BIGCAP_WATCHLIST = [
     "삼성전자",
@@ -44,7 +43,20 @@ BASE_PRICE_MAP = {
     "POSCO홀딩스": 410000,
     "LG에너지솔루션": 430000,
 }
-
+STOCK_CODE_MAP = {
+    "삼성전자": "005930",
+    "SK하이닉스": "000660",
+    "현대차": "005380",
+    "기아": "000270",
+    "한화에어로": "012450",
+    "LIG넥스원": "079550",
+    "한화시스템": "272210",
+    "S-Oil": "010950",
+    "한국전력": "015760",
+    "두산에너빌리티": "034020",
+    "POSCO홀딩스": "005490",
+    "LG에너지솔루션": "373220",
+}
 def read_market_file(file_path: str) -> str:
     path = Path(file_path)
     return path.read_text(encoding="utf-8")
@@ -363,6 +375,9 @@ def make_trade_plan(scored_candidates: list[dict], stock_prices: dict[str, float
 
         if current_price is None:
             continue
+        if not is_valid_price(stock, current_price):
+            print(f"[계획 제외] 비정상 가격: {stock} = {current_price}")
+            continue
 
         entry_price = current_price
         target_price = round(current_price * 1.02, 2)
@@ -402,15 +417,15 @@ def format_trade_plans(trade_plans: list[dict]) -> str:
     return "\n".join(lines)
 
 def format_orders(orders: list[dict]) -> str:
-
     if not orders:
         return "없음"
 
     lines = []
 
     for order in orders:
+        display_name = order.get("name", order["symbol"])
         lines.append(
-            f"[ORDER] {order['symbol']} "
+            f"[ORDER] {display_name} ({order['symbol']}) "
             f"{order['side']} "
             f"{order['quantity']}주 "
             f"@ {order['price']} "
@@ -420,19 +435,25 @@ def format_orders(orders: list[dict]) -> str:
     return "\n".join(lines)
 
 def generate_order_tickets(trade_plans: list[dict]) -> list[dict]:
-
     orders = []
 
     for plan in trade_plans:
-
         if plan["signal"] != "매매 후보":
             continue
 
+        stock_name = plan["stock"]
+        stock_code = STOCK_CODE_MAP.get(stock_name)
+
+        if not stock_code:
+            print(f"[주문 제외] 종목코드 없음: {stock_name}")
+            continue
+
         order = {
-            "symbol": plan["stock"],
+            "symbol": stock_code,      # 실제 주문용 6자리 코드
+            "name": stock_name,        # 로그/출력용 종목명
             "side": "BUY",
             "quantity": plan["quantity"],
-            "price": plan["entry_price"],
+            "price": int(plan["entry_price"]),
             "stop_loss": plan["stop_price"],
             "take_profit": plan["target_price"],
             "strategy": "MOMENTUM",
@@ -482,6 +503,20 @@ def parse_market_data(text: str) -> dict:
         "institution_flow": institution_flow,
     }
 
+def is_valid_price(stock: str, price: float) -> bool:
+    if price <= 0:
+        return False
+
+    # 너무 비정상적인 값 방지
+    if stock == "삼성전자" and not (30000 <= price <= 100000):
+        return False
+    if stock == "한화시스템" and not (5000 <= price <= 50000):
+        return False
+    if stock == "SK하이닉스" and not (50000 <= price <= 5000000):
+        return False
+
+    return True
+
 def run_analysis(execute: bool = False) -> dict:
     text = read_market_file("data/market.txt")
     market = parse_market_data(text)
@@ -510,10 +545,13 @@ def run_analysis(execute: bool = False) -> dict:
     raw_orders = generate_order_tickets(trade_plans)
     approved_orders = filter_orders_by_risk(raw_orders, TOTAL_CAPITAL)
 
+    trades = []
+
     if execute:
         trades = execute_orders(approved_orders)
         save_trade_log(trades)
-    print("\n=== PAPER TRADING RESULT ===")
+
+    print(f"\n=== {MODE.upper()} TRADING RESULT ===")
     print(trades)
 
     summary = make_summary(
@@ -581,7 +619,6 @@ def run_analysis(execute: bool = False) -> dict:
         "foreign_flow": market["foreign_flow"],
         "institution_flow": market["institution_flow"],
         "summary": summary,
-        print("test")
     }
 
     append_csv_row("reports/history.csv", csv_row)
@@ -604,7 +641,14 @@ def run_analysis(execute: bool = False) -> dict:
 
 
 def main() -> None:
-    run_analysis(execute=True)
+    if MODE == "real":
+        confirm = input("⚠️ 실계좌 주문 실행합니다. 계속? (yes/no): ")
+        if confirm.lower() != "yes":
+            print("실행 취소")
+            return
+
+    should_execute = MODE in ("mock", "real")
+    run_analysis(execute=should_execute)
 
 
 if __name__ == "__main__":

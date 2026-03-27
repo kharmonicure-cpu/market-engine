@@ -5,8 +5,8 @@ import random
 
 def fetch_market_data() -> dict:
     """
-    지금은 연습용 더미 데이터.
-    나중에 네이버/KRX/키움 API로 교체할 자리.
+    연습용 더미 데이터
+    나중에 네이버/KRX/키움 API로 교체
     """
 
     return {
@@ -20,14 +20,13 @@ def fetch_market_data() -> dict:
         "foreign_flow": "매수",
         "institution_flow": "매도",
         "stock_prices": {
-            "삼성전자": random.randint(188000, 194000),
-            "SK하이닉스": random.randint(930000, 950000),
-            "한화시스템": random.randint(148000, 153000),
-            "현대차": random.randint(545000, 560000),
-            "기아": random.randint(125000, 131000),
+            "삼성전자": random.randint(55000, 70000),
+            "SK하이닉스": random.randint(180000, 260000),
+            "한화시스템": random.randint(15000, 25000),
+            "현대차": random.randint(180000, 280000),
+            "기아": random.randint(85000, 130000),
         },
     }
-
 
 
 def save_market_file(data: dict, file_path: str = "data/market.txt") -> None:
@@ -40,17 +39,17 @@ def save_market_file(data: dict, file_path: str = "data/market.txt") -> None:
     stock_price_text = "|".join(stock_price_parts)
 
     text = f"""
-    시각 {data['timestamp']}
-    코스피 {data['kospi']}%
-    코스닥 {data['kosdaq']}%
-    상승종목수 {data['up_count']}
-    하락종목수 {data['down_count']}
-    강한섹터 {strong_sector_text}
-    거래대금상위 {leaders_text}
-    종목현재가 {stock_price_text}
-    외국인 {data['foreign_flow']}
-    기관 {data['institution_flow']}
-    """.strip()
+시각 {data['timestamp']}
+코스피 {data['kospi']}%
+코스닥 {data['kosdaq']}%
+상승종목수 {data['up_count']}
+하락종목수 {data['down_count']}
+강한섹터 {strong_sector_text}
+거래대금상위 {leaders_text}
+종목현재가 {stock_price_text}
+외국인 {data['foreign_flow']}
+기관 {data['institution_flow']}
+""".strip()
 
     path = Path(file_path)
     path.parent.mkdir(parents=True, exist_ok=True)
