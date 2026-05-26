@@ -17,6 +17,7 @@ class KiwoomTrader:
     def __init__(self):
         self.trades = []
         self.chejan_events = []
+        self.msg_events = []
 
         if MODE == "paper":
             self.kiwoom = None
@@ -162,3 +163,6 @@ class KiwoomTrader:
 
     def get_chejan_events(self):
         return self.chejan_events
+        
+    def get_msg_events(self):
+        return self.msg_events

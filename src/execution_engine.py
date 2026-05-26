@@ -55,30 +55,39 @@ def execute_orders(orders):
         if MODE != "paper":
             for _ in range(5):
                 pythoncom.PumpWaitingMessages()
+                current_trader.drain_chejan_queue()
                 time.sleep(0.1)
 
+    # 중요:
+    # 체결 대기는 for문이 끝난 뒤에 실행되어야 함
     if MODE != "paper":
         print("\n=== 체결 이벤트 대기 (10초) ===")
         start = time.time()
+        last_print_second = -1
 
         while time.time() - start < 10:
             pythoncom.PumpWaitingMessages()
-            time.sleep(0.1)
+            current_trader.drain_chejan_queue()
 
-            print("\n=== 수신된 체결/잔고 이벤트 수 ===")
-            print(len(current_trader.get_chejan_events()))
+            elapsed = int(time.time() - start)
 
-            print("\n=== 수신된 체결 데이터 ===")
-            print(current_trader.get_chejan_trades())
+            if elapsed != last_print_second:
+                last_print_second = elapsed
 
-            print("\n=== 수신된 서버 메시지 수 ===")
-            print(len(current_trader.get_msg_events()))
+                print("\n=== 체결 이벤트 대기 상태 ===")
+                print(f"대기 시간: {elapsed}초")
+                print(f"체결/잔고 이벤트 수: {len(current_trader.get_chejan_events())}")
+                print(f"체결 데이터: {current_trader.get_chejan_trades()}")
+                print(f"서버 메시지 수: {len(current_trader.get_msg_events())}")
 
-            if current_trader.get_msg_events():
-                print(current_trader.get_msg_events()[-1])
+                if current_trader.get_msg_events():
+                    print("최근 서버 메시지:", current_trader.get_msg_events()[-1])
 
             if current_trader.get_chejan_events():
+                print("\n체결/잔고 이벤트 수신 완료")
                 break
+
+            time.sleep(0.1)
 
     return results
 
