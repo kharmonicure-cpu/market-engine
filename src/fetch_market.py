@@ -1,31 +1,60 @@
 from pathlib import Path
 from datetime import datetime
-import random
+import csv
+
+
+def load_stock_prices(file_path: str = "data/stock_prices.csv") -> dict:
+    """
+    data/stock_prices.csv 파일에서 종목 가격을 읽어온다.
+    32비트 키움 환경에서도 pandas/yfinance 없이 실행 가능하다.
+    """
+
+    path = Path(file_path)
+
+    if not path.exists():
+        print(f"[WARN] 가격 파일이 없습니다: {file_path}")
+        return {}
+
+    stock_prices = {}
+
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+
+        for row in reader:
+            stock = row["stock"]
+            price = int(row["price"])
+            stock_prices[stock] = price
+
+    return stock_prices
 
 
 def fetch_market_data() -> dict:
     """
-    연습용 더미 데이터
-    나중에 네이버/KRX/키움 API로 교체
+    CSV 기반 시장 데이터 수집
+    yfinance/pandas 없이 32비트 Python에서 실행 가능
     """
+
+    stock_prices = load_stock_prices()
 
     return {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
-        "kospi": round(random.uniform(-1.5, 1.5), 2),
-        "kosdaq": round(random.uniform(-2.0, 2.0), 2),
-        "up_count": random.randint(200, 900),
-        "down_count": random.randint(100, 800),
-        "strong_sectors": ["반도체", "방산"],
-        "leaders": ["삼성전자", "SK하이닉스", "한화시스템"],
-        "foreign_flow": "매수",
-        "institution_flow": "매도",
-        "stock_prices": {
-            "삼성전자": random.randint(55000, 70000),
-            "SK하이닉스": random.randint(180000, 260000),
-            "한화시스템": random.randint(15000, 25000),
-            "현대차": random.randint(180000, 280000),
-            "기아": random.randint(85000, 130000),
-        },
+
+        # 아직은 임시값
+        "kospi": 0.0,
+        "kosdaq": 0.0,
+        "up_count": 0,
+        "down_count": 0,
+
+        # 아직은 임시값
+        "strong_sectors": ["반도체", "자동차"],
+        "leaders": list(stock_prices.keys()),
+
+        # 아직은 임시값
+        "foreign_flow": "확인필요",
+        "institution_flow": "확인필요",
+
+        # CSV에서 읽은 가격
+        "stock_prices": stock_prices,
     }
 
 
@@ -34,8 +63,10 @@ def save_market_file(data: dict, file_path: str = "data/market.txt") -> None:
     leaders_text = " ".join(data["leaders"]) if data["leaders"] else "없음"
 
     stock_price_parts = []
+
     for stock, price in data["stock_prices"].items():
         stock_price_parts.append(f"{stock}:{price}")
+
     stock_price_text = "|".join(stock_price_parts)
 
     text = f"""
