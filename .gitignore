@@ -9,3 +9,12 @@ data/
 # Python cache
 __pycache__/
 *.pyc
+
+# Generated trading reports and logs
+reports/history.csv
+reports/history_summary.txt
+reports/summary.txt
+trade_log.csv
+
+# Local market data
+data/market.txt
