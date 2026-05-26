@@ -7,7 +7,7 @@ from collections import Counter
 from src.risk_engine import filter_orders_by_risk
 from src.execution_engine import execute_orders, save_trade_log
 from src.config import TOTAL_CAPITAL, POSITION_RATIO, MODE
-
+from utils.safety import check_trading_permission
 
 BIGCAP_WATCHLIST = [
     "삼성전자",
@@ -548,11 +548,19 @@ def run_analysis(execute: bool = False) -> dict:
     trades = []
 
     if execute:
-        trades = execute_orders(approved_orders)
-        save_trade_log(trades)
+        if not check_trading_permission():
+            print("[SAFE MODE] run_analysis에서 주문 실행이 차단되었습니다.")
+            print("[SAFE MODE] execute_orders()를 호출하지 않습니다.")
+        else:
+            trades = execute_orders(approved_orders)
+            save_trade_log(trades)
 
-    print(f"\n=== {MODE.upper()} TRADING RESULT ===")
-    print(trades)
+    if execute:
+        print(f"\n=== {MODE.upper()} TRADING RESULT ===")
+        print(trades)
+    else:
+        print("\n=== ANALYSIS ONLY MODE ===")
+        print("주문 실행 안 함: Safe Mode로 차단되어 분석과 주문 티켓만 생성했습니다.")
 
     summary = make_summary(
         market_status=market_status,
@@ -641,14 +649,22 @@ def run_analysis(execute: bool = False) -> dict:
 
 
 def main() -> None:
+    can_trade = check_trading_permission()
+
+    if not can_trade:
+        print("[SAFE MODE] 주문 실행이 차단되었습니다.")
+        print("[SAFE MODE] 시장 분석과 주문 티켓 생성만 실행합니다.")
+        run_analysis(execute=False)
+        return
+
     if MODE == "real":
         confirm = input("⚠️ 실계좌 주문 실행합니다. 계속? (yes/no): ")
         if confirm.lower() != "yes":
             print("실행 취소")
+            run_analysis(execute=False)
             return
 
-    should_execute = MODE in ("mock", "real")
-    run_analysis(execute=should_execute)
+    run_analysis(execute=True)
 
 
 if __name__ == "__main__":
