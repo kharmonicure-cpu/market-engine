@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import re
 import csv
 from datetime import date
@@ -649,10 +650,18 @@ def run_analysis(execute: bool = False) -> dict:
 
 
 def main() -> None:
-    can_trade = check_trading_permission()
+    allow_order = os.getenv("ALLOW_ORDER", "false").lower() == "true"
 
-    if not can_trade:
-        print("[SAFE MODE] 주문 실행이 차단되었습니다.")
+    if not allow_order:
+        print("[SAFE MODE] 주문 실행 없이 분석만 수행합니다.")
+        print("[SAFE MODE] 주문 티켓은 생성하지만 execute_orders()는 호출하지 않습니다.")
+        run_analysis(execute=False)
+        return
+
+    print("[ORDER ENABLED] 주문 실행 모드입니다.")
+
+    if not check_trading_permission():
+        print("[SAFE MODE] check_trading_permission()에서 주문 실행이 차단되었습니다.")
         print("[SAFE MODE] 시장 분석과 주문 티켓 생성만 실행합니다.")
         run_analysis(execute=False)
         return
