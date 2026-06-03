@@ -117,7 +117,61 @@ def extract_stock_prices(line_prefix: str, text: str) -> dict[str, float]:
             continue
 
     return prices
+def extract_stock_prices(line_prefix: str, text: str) -> dict[str, float]:
+    pattern = rf"{line_prefix}\s*(.+)"
+    match = re.search(pattern, text)
+    if not match:
+        return {}
 
+    raw_value = match.group(1).strip()
+    if raw_value == "없음":
+        return {}
+
+    prices = {}
+    parts = raw_value.split("|")
+
+    for part in parts:
+        if ":" not in part:
+            continue
+        stock, price = part.split(":", 1)
+        stock = stock.strip()
+        price = price.strip()
+
+        try:
+            prices[stock] = float(price)
+        except ValueError:
+            continue
+
+    return prices
+
+
+def extract_stock_text_values(line_prefix: str, text: str) -> dict[str, str]:
+    pattern = rf"{line_prefix}\s*(.+)"
+    match = re.search(pattern, text)
+    if not match:
+        return {}
+
+    raw_value = match.group(1).strip()
+    if raw_value == "없음":
+        return {}
+
+    values = {}
+    parts = raw_value.split("|")
+
+    for part in parts:
+        if ":" not in part:
+            continue
+
+        stock, value = part.split(":", 1)
+        stock = stock.strip()
+        value = value.strip()
+
+        if stock and value:
+            values[stock] = value
+
+    return values
+
+    
 def detect_flow_keyword(text: str, actor: str) -> str:
     if f"{actor} 매수" in text:
         return "매수"
@@ -491,6 +545,11 @@ def parse_market_data(text: str) -> dict:
     sectors = extract_words("강한섹터", text)
     leaders = extract_words("거래대금상위", text)
     stock_prices = extract_stock_prices("종목현재가", text)
+
+    stock_trade_strength = extract_stock_prices("종목체결강도", text)
+    stock_foreign_flow = extract_stock_text_values("종목외국인수급", text)
+    stock_broker_flow = extract_stock_text_values("종목거래원흐름", text)
+
     foreign_flow = detect_flow_keyword(text, "외국인")
     institution_flow = detect_flow_keyword(text, "기관")
 
@@ -502,6 +561,9 @@ def parse_market_data(text: str) -> dict:
         "sectors": sectors,
         "leaders": leaders,
         "stock_prices": stock_prices,
+        "stock_trade_strength": stock_trade_strength,
+        "stock_foreign_flow": stock_foreign_flow,
+        "stock_broker_flow": stock_broker_flow,
         "foreign_flow": foreign_flow,
         "institution_flow": institution_flow,
     }
@@ -519,31 +581,35 @@ def is_valid_price(stock: str, price: float) -> bool:
         return False
 
     return True
-def run_quant_signal_test() -> None:
-    watch_stocks = [
-        {
-            "stock": "삼성전자",
-            "trade_strength": 135,
-            "foreign_flow": "매수",
-            "broker_flow": "매수우위",
-        },
-        {
-            "stock": "SK하이닉스",
-            "trade_strength": 118,
-            "foreign_flow": "매수",
-            "broker_flow": "중립",
-        },
-    ]
+def run_quant_signal_alerts(market: dict, trade_plans: list[dict]) -> None:
+    watch_stocks = []
+
+    for plan in trade_plans:
+        stock_name = plan["stock"]
+
+        watch_stocks.append(
+            {
+                "stock": stock_name,
+                "trade_strength": market["stock_trade_strength"].get(stock_name, 0),
+                "foreign_flow": market["stock_foreign_flow"].get(stock_name, "중립"),
+                "broker_flow": market["stock_broker_flow"].get(stock_name, "중립"),
+            }
+        )
+
     print()
-    print("=== 퀀트 매수 신호 테스트 ===")
+    print("=== 퀀트 매수 신호 ===")
+
+    if not watch_stocks:
+        print("[QUANT] 감시할 종목이 없습니다.")
 
     for stock in watch_stocks:
         result = make_buy_signal(stock)
 
-        if result["signal"] == "BUY":
+        if result["signal"] in ["BUY", "STRONG_BUY"]:
             reasons_text = ", ".join(result["reasons"])
             send_alert(
                 f"{result['stock']} 매수 신호 발생\n"
+                f"신호등급: {result['signal']}\n"
                 f"사유: {reasons_text}\n"
                 f"체결강도: {result['trade_strength']}%\n"
                 f"외국인 수급: {result['foreign_flow']}\n"
@@ -560,47 +626,51 @@ def run_quant_signal_test() -> None:
     current_positions = [
         {
             "stock": "기아",
-            "trade_strength": 95,
+            "trade_strength": market["stock_trade_strength"].get("기아", 0),
             "profit_rate": 1.2,
-            "foreign_flow": "중립",
-            "broker_flow": "매도우위",
+            "foreign_flow": market["stock_foreign_flow"].get("기아", "중립"),
+            "broker_flow": market["stock_broker_flow"].get("기아", "중립"),
         },
         {
             "stock": "한화시스템",
-            "trade_strength": 112,
+            "trade_strength": market["stock_trade_strength"].get("한화시스템", 0),
             "profit_rate": -3.5,
-            "foreign_flow": "중립",
-            "broker_flow": "매도우위",
-            
+            "foreign_flow": market["stock_foreign_flow"].get("한화시스템", "중립"),
+            "broker_flow": market["stock_broker_flow"].get("한화시스템", "중립"),
         },
         {
-        "stock": "현대차",
-        "trade_strength": 155,
-        "profit_rate": 5.2,
-        "foreign_flow": "매수",
-        "broker_flow": "매수우위",
-    },
+            "stock": "현대차",
+            "trade_strength": market["stock_trade_strength"].get("현대차", 0),
+            "profit_rate": 5.2,
+            "foreign_flow": market["stock_foreign_flow"].get("현대차", "중립"),
+            "broker_flow": market["stock_broker_flow"].get("현대차", "중립"),
+        },
     ]
 
     print()
-    print("=== 퀀트 매도 신호 테스트 ===")
+    print("=== 퀀트 매도 신호 ===")
 
     for position in current_positions:
         result = make_sell_signal(position)
 
-        if result["signal"] == "SELL":
+        if result["signal"] in ["SELL", "STRONG_SELL"]:
             reasons_text = ", ".join(result["reasons"])
             send_alert(
                 f"{result['stock']} 매도 신호 발생\n"
+                f"신호등급: {result['signal']}\n"
                 f"사유: {reasons_text}\n"
                 f"체결강도: {result['trade_strength']}%\n"
-                f"수익률: {result['profit_rate']}%"
+                f"수익률: {result['profit_rate']}%\n"
+                f"외국인 수급: {result['foreign_flow']}\n"
+                f"거래원 흐름: {result['broker_flow']}"
             )
         else:
             print(
                 f"[HOLD] {result['stock']} 보유 유지 "
                 f"(체결강도 {result['trade_strength']}%, "
-                f"수익률 {result['profit_rate']}%)"
+                f"수익률 {result['profit_rate']}%, "
+                f"외국인 {result['foreign_flow']}, "
+                f"거래원 {result['broker_flow']})"
             )
 def run_analysis(execute: bool = False) -> dict:
     text = read_market_file("data/market.txt")
@@ -630,6 +700,7 @@ def run_analysis(execute: bool = False) -> dict:
     raw_orders = generate_order_tickets(trade_plans)
     approved_orders = filter_orders_by_risk(raw_orders, TOTAL_CAPITAL)
 
+    run_quant_signal_alerts(market, trade_plans)
     trades = []
 
     if execute:
@@ -742,8 +813,6 @@ def main() -> None:
         print("[SAFE MODE] 주문 실행 없이 분석만 수행합니다.")
         print("[SAFE MODE] 주문 티켓은 생성하지만 execute_orders()는 호출하지 않습니다.")
         run_analysis(execute=False)
-        run_quant_signal_test()
-
         return
 
     print("[ORDER ENABLED] 주문 실행 모드입니다.")
@@ -752,8 +821,6 @@ def main() -> None:
         print("[SAFE MODE] check_trading_permission()에서 주문 실행이 차단되었습니다.")
         print("[SAFE MODE] 시장 분석과 주문 티켓 생성만 실행합니다.")
         run_analysis(execute=False)
-        run_quant_signal_test()
-
         return
 
     if MODE == "real":
@@ -761,12 +828,9 @@ def main() -> None:
         if confirm.lower() != "yes":
             print("실행 취소")
             run_analysis(execute=False)
-            run_quant_signal_test()
-
             return
 
     run_analysis(execute=True)
-    run_quant_signal_test()
 
 
 if __name__ == "__main__":
