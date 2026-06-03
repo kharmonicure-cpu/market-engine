@@ -124,6 +124,7 @@ def make_market_status_history_chart(history_rows: list[dict]) -> str:
     </div>
     """
 
+
 def make_top_candidate_history_chart(history_rows: list[dict]) -> str:
     if not history_rows:
         return """
@@ -133,21 +134,31 @@ def make_top_candidate_history_chart(history_rows: list[dict]) -> str:
     counter = Counter()
 
     for row in history_rows:
+        bigcap_candidates = row.get("bigcap_candidates", "").strip()
         candidate_scores = row.get("candidate_scores", "").strip()
 
-        if not candidate_scores:
+        if bigcap_candidates:
+            candidates = bigcap_candidates.split("|")
+
+            for stock in candidates:
+                stock = stock.strip()
+
+                if stock:
+                    counter[stock] += 1
+
             continue
 
-        parts = candidate_scores.split("|")
+        if candidate_scores:
+            parts = candidate_scores.split("|")
 
-        for part in parts:
-            if ":" not in part:
-                continue
+            for part in parts:
+                if ":" not in part:
+                    continue
 
-            stock = part.split(":", 1)[0].strip()
+                stock = part.split(":", 1)[0].strip()
 
-            if stock:
-                counter[stock] += 1
+                if stock:
+                    counter[stock] += 1
 
     top_items = counter.most_common(5)
 
