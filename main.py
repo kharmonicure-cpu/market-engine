@@ -11,6 +11,7 @@ from src.config import TOTAL_CAPITAL, POSITION_RATIO, MODE
 from src.signal_engine import make_buy_signal, make_sell_signal
 from src.alert_engine import send_alert
 from src.alert_state import load_alert_state, save_alert_state, was_alert_sent, mark_alert_sent, reset_alert_state
+from src.report_dashboard import generate_dashboard
 from utils.safety import check_trading_permission
 
 BIGCAP_WATCHLIST = [
@@ -868,7 +869,7 @@ def run_analysis(execute: bool = False) -> dict:
     print(history_summary)
     save_text_report("reports/history_summary.txt", history_summary)
 
-    return {
+    analysis_result = {
         "market_status": market_status,
         "bigcap_candidates": bigcap_candidates,
         "scored_candidates": scored_candidates,
@@ -877,6 +878,14 @@ def run_analysis(execute: bool = False) -> dict:
         "summary": summary,
         "report_text": report_text,
     }
+
+    generate_dashboard(
+        analysis_result=analysis_result,
+        market=market,
+        history_summary=history_summary,
+    )
+
+    return analysis_result
 
 
 
