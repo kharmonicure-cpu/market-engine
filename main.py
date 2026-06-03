@@ -63,7 +63,61 @@ STOCK_CODE_MAP = {
 def read_market_file(file_path: str) -> str:
     path = Path(file_path)
     return path.read_text(encoding="utf-8")
+def read_positions_file(file_path: str) -> list[dict]:
+    path = Path(file_path)
 
+    if not path.exists():
+        print(f"[POSITIONS] 보유 종목 파일이 없습니다: {file_path}")
+        return []
+
+    positions = []
+
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+
+            if not line:
+                continue
+
+            if line.startswith("#"):
+                continue
+
+            parts = line.split(",")
+
+            if len(parts) != 3:
+                print(f"[POSITIONS] 잘못된 줄 형식입니다: {line}")
+                continue
+
+            stock, entry_price, current_price = parts
+
+            stock = stock.strip()
+
+            try:
+                entry_price = float(entry_price.strip())
+                current_price = float(current_price.strip())
+            except ValueError:
+                print(f"[POSITIONS] 가격 변환 실패: {line}")
+                continue
+
+            if entry_price <= 0:
+                print(f"[POSITIONS] 매수가가 0 이하입니다: {line}")
+                continue
+
+            profit_rate = round(
+                ((current_price - entry_price) / entry_price) * 100,
+                2,
+            )
+
+            positions.append(
+                {
+                    "stock": stock,
+                    "entry_price": entry_price,
+                    "current_price": current_price,
+                    "profit_rate": profit_rate,
+                }
+            )
+
+    return positions
 
 def extract_percent(line_prefix: str, text: str) -> float:
     pattern = rf"{line_prefix}\s*([+-]?\d+(?:\.\d+)?)%"
@@ -623,32 +677,29 @@ def run_quant_signal_alerts(market: dict, trade_plans: list[dict]) -> None:
                 f"거래원 {result['broker_flow']})"
             )
 
-    current_positions = [
-        {
-            "stock": "기아",
-            "trade_strength": market["stock_trade_strength"].get("기아", 0),
-            "profit_rate": 1.2,
-            "foreign_flow": market["stock_foreign_flow"].get("기아", "중립"),
-            "broker_flow": market["stock_broker_flow"].get("기아", "중립"),
-        },
-        {
-            "stock": "한화시스템",
-            "trade_strength": market["stock_trade_strength"].get("한화시스템", 0),
-            "profit_rate": -3.5,
-            "foreign_flow": market["stock_foreign_flow"].get("한화시스템", "중립"),
-            "broker_flow": market["stock_broker_flow"].get("한화시스템", "중립"),
-        },
-        {
-            "stock": "현대차",
-            "trade_strength": market["stock_trade_strength"].get("현대차", 0),
-            "profit_rate": 5.2,
-            "foreign_flow": market["stock_foreign_flow"].get("현대차", "중립"),
-            "broker_flow": market["stock_broker_flow"].get("현대차", "중립"),
-        },
-    ]
+    raw_positions = read_positions_file("data/positions.txt")
+    current_positions = []
+
+    for position in raw_positions:
+        stock_name = position["stock"]
+
+        current_positions.append(
+            {
+                "stock": stock_name,
+                "entry_price": position["entry_price"],
+                "current_price": position["current_price"],
+                "profit_rate": position["profit_rate"],
+                "trade_strength": market["stock_trade_strength"].get(stock_name, 0),
+                "foreign_flow": market["stock_foreign_flow"].get(stock_name, "중립"),
+                "broker_flow": market["stock_broker_flow"].get(stock_name, "중립"),
+            }
+        )
 
     print()
     print("=== 퀀트 매도 신호 ===")
+
+    if not current_positions:
+        print("[QUANT] 보유 종목이 없습니다.")
 
     for position in current_positions:
         result = make_sell_signal(position)
@@ -659,6 +710,8 @@ def run_quant_signal_alerts(market: dict, trade_plans: list[dict]) -> None:
                 f"{result['stock']} 매도 신호 발생\n"
                 f"신호등급: {result['signal']}\n"
                 f"사유: {reasons_text}\n"
+                f"매수가: {position['entry_price']}\n"
+                f"현재가: {position['current_price']}\n"
                 f"체결강도: {result['trade_strength']}%\n"
                 f"수익률: {result['profit_rate']}%\n"
                 f"외국인 수급: {result['foreign_flow']}\n"
@@ -667,7 +720,9 @@ def run_quant_signal_alerts(market: dict, trade_plans: list[dict]) -> None:
         else:
             print(
                 f"[HOLD] {result['stock']} 보유 유지 "
-                f"(체결강도 {result['trade_strength']}%, "
+                f"(매수가 {position['entry_price']}, "
+                f"현재가 {position['current_price']}, "
+                f"체결강도 {result['trade_strength']}%, "
                 f"수익률 {result['profit_rate']}%, "
                 f"외국인 {result['foreign_flow']}, "
                 f"거래원 {result['broker_flow']})"
