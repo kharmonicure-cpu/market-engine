@@ -18,3 +18,4 @@ reports/history.csv
 reports/history_summary.txt
 reports/summary.txt
 trade_log.csv
+reports/alert_state.json
