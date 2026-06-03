@@ -8,6 +8,8 @@ from collections import Counter
 from src.risk_engine import filter_orders_by_risk
 from src.execution_engine import execute_orders, save_trade_log
 from src.config import TOTAL_CAPITAL, POSITION_RATIO, MODE
+from src.signal_engine import make_buy_signal, make_sell_signal
+from src.alert_engine import send_alert
 from utils.safety import check_trading_permission
 
 BIGCAP_WATCHLIST = [
@@ -517,7 +519,89 @@ def is_valid_price(stock: str, price: float) -> bool:
         return False
 
     return True
+def run_quant_signal_test() -> None:
+    watch_stocks = [
+        {
+            "stock": "삼성전자",
+            "trade_strength": 135,
+            "foreign_flow": "매수",
+            "broker_flow": "매수우위",
+        },
+        {
+            "stock": "SK하이닉스",
+            "trade_strength": 118,
+            "foreign_flow": "매수",
+            "broker_flow": "중립",
+        },
+    ]
+    print()
+    print("=== 퀀트 매수 신호 테스트 ===")
 
+    for stock in watch_stocks:
+        result = make_buy_signal(stock)
+
+        if result["signal"] == "BUY":
+            reasons_text = ", ".join(result["reasons"])
+            send_alert(
+                f"{result['stock']} 매수 신호 발생\n"
+                f"사유: {reasons_text}\n"
+                f"체결강도: {result['trade_strength']}%\n"
+                f"외국인 수급: {result['foreign_flow']}\n"
+                f"거래원 흐름: {result['broker_flow']}"
+            )
+        else:
+            print(
+                f"[WAIT] {result['stock']} 매수 조건 미충족 "
+                f"(체결강도 {result['trade_strength']}%, "
+                f"외국인 {result['foreign_flow']}, "
+                f"거래원 {result['broker_flow']})"
+            )
+
+    current_positions = [
+        {
+            "stock": "기아",
+            "trade_strength": 95,
+            "profit_rate": 1.2,
+            "foreign_flow": "중립",
+            "broker_flow": "매도우위",
+        },
+        {
+            "stock": "한화시스템",
+            "trade_strength": 112,
+            "profit_rate": -3.5,
+            "foreign_flow": "중립",
+            "broker_flow": "매도우위",
+            
+        },
+        {
+        "stock": "현대차",
+        "trade_strength": 155,
+        "profit_rate": 5.2,
+        "foreign_flow": "매수",
+        "broker_flow": "매수우위",
+    },
+    ]
+
+    print()
+    print("=== 퀀트 매도 신호 테스트 ===")
+
+    for position in current_positions:
+        result = make_sell_signal(position)
+
+        if result["signal"] == "SELL":
+            reasons_text = ", ".join(result["reasons"])
+            send_alert(
+                f"{result['stock']} 매도 신호 발생\n"
+                f"사유: {reasons_text}\n"
+                f"체결강도: {result['trade_strength']}%\n"
+                f"수익률: {result['profit_rate']}%"
+            )
+        else:
+            print(
+                f"[HOLD] {result['stock']} 보유 유지 "
+                f"(체결강도 {result['trade_strength']}%, "
+                f"수익률 {result['profit_rate']}%)"
+            )
 def run_analysis(execute: bool = False) -> dict:
     text = read_market_file("data/market.txt")
     market = parse_market_data(text)
@@ -649,6 +733,8 @@ def run_analysis(execute: bool = False) -> dict:
     }
 
 
+
+
 def main() -> None:
     allow_order = os.getenv("ALLOW_ORDER", "false").lower() == "true"
 
@@ -656,6 +742,8 @@ def main() -> None:
         print("[SAFE MODE] 주문 실행 없이 분석만 수행합니다.")
         print("[SAFE MODE] 주문 티켓은 생성하지만 execute_orders()는 호출하지 않습니다.")
         run_analysis(execute=False)
+        run_quant_signal_test()
+
         return
 
     print("[ORDER ENABLED] 주문 실행 모드입니다.")
@@ -664,6 +752,8 @@ def main() -> None:
         print("[SAFE MODE] check_trading_permission()에서 주문 실행이 차단되었습니다.")
         print("[SAFE MODE] 시장 분석과 주문 티켓 생성만 실행합니다.")
         run_analysis(execute=False)
+        run_quant_signal_test()
+
         return
 
     if MODE == "real":
@@ -671,9 +761,12 @@ def main() -> None:
         if confirm.lower() != "yes":
             print("실행 취소")
             run_analysis(execute=False)
+            run_quant_signal_test()
+
             return
 
     run_analysis(execute=True)
+    run_quant_signal_test()
 
 
 if __name__ == "__main__":
