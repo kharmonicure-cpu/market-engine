@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import re
 import csv
+import webbrowser
 from datetime import date
 from collections import Counter
 
@@ -879,11 +880,17 @@ def run_analysis(execute: bool = False) -> dict:
         "report_text": report_text,
     }
 
+    dashboard_path = Path("reports/dashboard.html")
+
     generate_dashboard(
         analysis_result=analysis_result,
         market=market,
         history_summary=history_summary,
+        output_path=str(dashboard_path),
     )
+
+    if os.getenv("OPEN_DASHBOARD", "true").lower() == "true":
+        webbrowser.open(dashboard_path.resolve().as_uri())
 
     return analysis_result
 
