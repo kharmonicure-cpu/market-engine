@@ -10,6 +10,7 @@ from src.execution_engine import execute_orders, save_trade_log
 from src.config import TOTAL_CAPITAL, POSITION_RATIO, MODE
 from src.signal_engine import make_buy_signal, make_sell_signal
 from src.alert_engine import send_alert
+from src.alert_state import load_alert_state, save_alert_state, was_alert_sent, mark_alert_sent, reset_alert_state
 from utils.safety import check_trading_permission
 
 BIGCAP_WATCHLIST = [
@@ -636,6 +637,7 @@ def is_valid_price(stock: str, price: float) -> bool:
 
     return True
 def run_quant_signal_alerts(market: dict, trade_plans: list[dict]) -> None:
+    alert_state = load_alert_state()
     watch_stocks = []
 
     for plan in trade_plans:
@@ -660,15 +662,24 @@ def run_quant_signal_alerts(market: dict, trade_plans: list[dict]) -> None:
         result = make_buy_signal(stock)
 
         if result["signal"] in ["BUY", "STRONG_BUY"]:
-            reasons_text = ", ".join(result["reasons"])
-            send_alert(
-                f"{result['stock']} 매수 신호 발생\n"
-                f"신호등급: {result['signal']}\n"
-                f"사유: {reasons_text}\n"
-                f"체결강도: {result['trade_strength']}%\n"
-                f"외국인 수급: {result['foreign_flow']}\n"
-                f"거래원 흐름: {result['broker_flow']}"
-            )
+            stock_name = result["stock"]
+            signal = result["signal"]
+
+            if was_alert_sent(stock_name, signal, alert_state):
+                print(f"[ALERT SKIPPED] {stock_name} {signal} 이미 알림 보냄")
+            else:
+                reasons_text = ", ".join(result["reasons"])
+                send_alert(
+                    f"{result['stock']} 매수 신호 발생\n"
+                    f"신호등급: {result['signal']}\n"
+                    f"사유: {reasons_text}\n"
+                    f"체결강도: {result['trade_strength']}%\n"
+                    f"외국인 수급: {result['foreign_flow']}\n"
+                    f"거래원 흐름: {result['broker_flow']}"
+                )
+
+                alert_state = mark_alert_sent(stock_name, signal, alert_state)
+                save_alert_state(alert_state)
         else:
             print(
                 f"[WAIT] {result['stock']} 매수 조건 미충족 "
@@ -705,18 +716,27 @@ def run_quant_signal_alerts(market: dict, trade_plans: list[dict]) -> None:
         result = make_sell_signal(position)
 
         if result["signal"] in ["SELL", "STRONG_SELL"]:
-            reasons_text = ", ".join(result["reasons"])
-            send_alert(
-                f"{result['stock']} 매도 신호 발생\n"
-                f"신호등급: {result['signal']}\n"
-                f"사유: {reasons_text}\n"
-                f"매수가: {position['entry_price']}\n"
-                f"현재가: {position['current_price']}\n"
-                f"체결강도: {result['trade_strength']}%\n"
-                f"수익률: {result['profit_rate']}%\n"
-                f"외국인 수급: {result['foreign_flow']}\n"
-                f"거래원 흐름: {result['broker_flow']}"
-            )
+            stock_name = result["stock"]
+            signal = result["signal"]
+
+            if was_alert_sent(stock_name, signal, alert_state):
+                print(f"[ALERT SKIPPED] {stock_name} {signal} 이미 알림 보냄")
+            else:
+                reasons_text = ", ".join(result["reasons"])
+                send_alert(
+                    f"{result['stock']} 매도 신호 발생\n"
+                    f"신호등급: {result['signal']}\n"
+                    f"사유: {reasons_text}\n"
+                    f"매수가: {position['entry_price']}\n"
+                    f"현재가: {position['current_price']}\n"
+                    f"체결강도: {result['trade_strength']}%\n"
+                    f"수익률: {result['profit_rate']}%\n"
+                    f"외국인 수급: {result['foreign_flow']}\n"
+                    f"거래원 흐름: {result['broker_flow']}"
+                )
+
+                alert_state = mark_alert_sent(stock_name, signal, alert_state)
+                save_alert_state(alert_state)
         else:
             print(
                 f"[HOLD] {result['stock']} 보유 유지 "
@@ -862,6 +882,9 @@ def run_analysis(execute: bool = False) -> dict:
 
 
 def main() -> None:
+    if os.getenv("RESET_ALERT_STATE", "false").lower() == "true":
+        reset_alert_state()
+
     allow_order = os.getenv("ALLOW_ORDER", "false").lower() == "true"
 
     if not allow_order:
