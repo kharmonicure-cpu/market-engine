@@ -1,7 +1,18 @@
 from pathlib import Path
 from datetime import date
+from collections import Counter
+import csv
 import html
 
+def read_dashboard_history(file_path: str = "reports/history.csv") -> list[dict]:
+    path = Path(file_path)
+
+    if not path.exists():
+        return []
+
+    with path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
 
 def format_number(value) -> str:
     if value is None:
@@ -62,6 +73,119 @@ def make_market_breadth_chart(market: dict) -> str:
         </div>
     </div>
     """
+
+def make_market_status_history_chart(history_rows: list[dict]) -> str:
+    if not history_rows:
+        return """
+        <div class="empty">최근 시장 상태 그래프를 만들 데이터가 없습니다.</div>
+        """
+
+    counter = Counter()
+
+    for row in history_rows:
+        market_status = row.get("market_status", "").strip()
+
+        if market_status:
+            counter[market_status] += 1
+
+    chart_items = [
+        ("Risk-On", counter.get("Risk-On", 0), "bar-up"),
+        ("Neutral", counter.get("Neutral", 0), "bar-score"),
+        ("Risk-Off", counter.get("Risk-Off", 0), "bar-down"),
+    ]
+
+    max_count = max(count for _, count, _ in chart_items)
+
+    if max_count <= 0:
+        max_count = 1
+
+    rows = []
+
+    for label, count, bar_class in chart_items:
+        width_percent = round((count / max_count) * 100, 1)
+
+        rows.append(
+            f"""
+            <div class="chart-row">
+                <div class="chart-label">{html.escape(label)}</div>
+                <div class="chart-track">
+                    <div class="bar {bar_class}" style="width: {width_percent}%;">
+                        {count}회
+                    </div>
+                </div>
+                <div class="chart-percent">{count}</div>
+            </div>
+            """
+        )
+
+    return f"""
+    <div class="chart-box">
+        {''.join(rows)}
+    </div>
+    """
+
+def make_top_candidate_history_chart(history_rows: list[dict]) -> str:
+    if not history_rows:
+        return """
+        <div class="empty">후보 종목 그래프를 만들 데이터가 없습니다.</div>
+        """
+
+    counter = Counter()
+
+    for row in history_rows:
+        candidate_scores = row.get("candidate_scores", "").strip()
+
+        if not candidate_scores:
+            continue
+
+        parts = candidate_scores.split("|")
+
+        for part in parts:
+            if ":" not in part:
+                continue
+
+            stock = part.split(":", 1)[0].strip()
+
+            if stock:
+                counter[stock] += 1
+
+    top_items = counter.most_common(5)
+
+    if not top_items:
+        return """
+        <div class="empty">후보 종목 기록이 없습니다.</div>
+        """
+
+    max_count = max(count for _, count in top_items)
+
+    if max_count <= 0:
+        max_count = 1
+
+    rows = []
+
+    for stock, count in top_items:
+        width_percent = round((count / max_count) * 100, 1)
+
+        rows.append(
+            f"""
+            <div class="chart-row">
+                <div class="chart-label">{html.escape(stock)}</div>
+                <div class="chart-track">
+                    <div class="bar bar-score" style="width: {width_percent}%;">
+                        {count}회
+                    </div>
+                </div>
+                <div class="chart-percent">{count}</div>
+            </div>
+            """
+        )
+
+    return f"""
+    <div class="chart-box">
+        {''.join(rows)}
+    </div>
+    """
+
 def make_candidate_score_chart(scored_candidates: list[dict]) -> str:
     if not scored_candidates:
         return """
@@ -227,6 +351,7 @@ def generate_dashboard(
 
     sectors = market.get("sectors", [])
     leaders = market.get("leaders", [])
+    history_rows = read_dashboard_history()
 
     badge_class = get_market_badge_class(market_status)
 
@@ -550,6 +675,16 @@ def generate_dashboard(
                 </tr>
                 {make_order_rows(orders)}
             </table>
+        </div>
+
+                <div class="section">
+            <h2>최근 시장 상태 그래프</h2>
+            {make_market_status_history_chart(history_rows)}
+        </div>
+
+        <div class="section">
+            <h2>후보 종목 TOP 5</h2>
+            {make_top_candidate_history_chart(history_rows)}
         </div>
 
         <div class="section">
