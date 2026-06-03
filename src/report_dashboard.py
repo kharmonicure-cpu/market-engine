@@ -4,6 +4,21 @@ from collections import Counter
 import csv
 import html
 
+TOP_CANDIDATE_STOCKS = [
+    "삼성전자",
+    "SK하이닉스",
+    "현대차",
+    "기아",
+    "한화시스템",
+    "한화에어로",
+    "LIG넥스원",
+    "S-Oil",
+    "한국전력",
+    "두산에너빌리티",
+    "POSCO홀딩스",
+    "LG에너지솔루션",
+]
+
 def read_dashboard_history(file_path: str = "reports/history.csv") -> list[dict]:
     path = Path(file_path)
 
@@ -125,6 +140,7 @@ def make_market_status_history_chart(history_rows: list[dict]) -> str:
     """
 
 
+
 def make_top_candidate_history_chart(history_rows: list[dict]) -> str:
     if not history_rows:
         return """
@@ -134,31 +150,15 @@ def make_top_candidate_history_chart(history_rows: list[dict]) -> str:
     counter = Counter()
 
     for row in history_rows:
-        bigcap_candidates = row.get("bigcap_candidates", "").strip()
-        candidate_scores = row.get("candidate_scores", "").strip()
+        row_text = " ".join(
+            str(value)
+            for value in row.values()
+            if value is not None
+        )
 
-        if bigcap_candidates:
-            candidates = bigcap_candidates.split("|")
-
-            for stock in candidates:
-                stock = stock.strip()
-
-                if stock:
-                    counter[stock] += 1
-
-            continue
-
-        if candidate_scores:
-            parts = candidate_scores.split("|")
-
-            for part in parts:
-                if ":" not in part:
-                    continue
-
-                stock = part.split(":", 1)[0].strip()
-
-                if stock:
-                    counter[stock] += 1
+        for stock in TOP_CANDIDATE_STOCKS:
+            if stock in row_text:
+                counter[stock] += 1
 
     top_items = counter.most_common(5)
 
@@ -196,7 +196,6 @@ def make_top_candidate_history_chart(history_rows: list[dict]) -> str:
         {''.join(rows)}
     </div>
     """
-
 def make_candidate_score_chart(scored_candidates: list[dict]) -> str:
     if not scored_candidates:
         return """
@@ -234,7 +233,6 @@ def make_candidate_score_chart(scored_candidates: list[dict]) -> str:
         {''.join(rows)}
     </div>
     """
-
 def make_candidate_rows(scored_candidates: list[dict]) -> str:
     if not scored_candidates:
         return """
