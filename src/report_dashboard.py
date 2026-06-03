@@ -26,7 +26,79 @@ def get_market_badge_class(market_status: str) -> str:
         return "badge risk-off"
 
     return "badge neutral"
+def make_market_breadth_chart(market: dict) -> str:
+    up_count = int(market.get("up_count", 0) or 0)
+    down_count = int(market.get("down_count", 0) or 0)
 
+    total = up_count + down_count
+
+    if total <= 0:
+        up_percent = 0
+        down_percent = 0
+    else:
+        up_percent = round((up_count / total) * 100, 1)
+        down_percent = round((down_count / total) * 100, 1)
+
+    return f"""
+    <div class="chart-box">
+        <div class="chart-row">
+            <div class="chart-label">상승종목</div>
+            <div class="chart-track">
+                <div class="bar bar-up" style="width: {up_percent}%;">
+                    {up_count:,}개
+                </div>
+            </div>
+            <div class="chart-percent">{up_percent}%</div>
+        </div>
+
+        <div class="chart-row">
+            <div class="chart-label">하락종목</div>
+            <div class="chart-track">
+                <div class="bar bar-down" style="width: {down_percent}%;">
+                    {down_count:,}개
+                </div>
+            </div>
+            <div class="chart-percent">{down_percent}%</div>
+        </div>
+    </div>
+    """
+def make_candidate_score_chart(scored_candidates: list[dict]) -> str:
+    if not scored_candidates:
+        return """
+        <div class="empty">후보 점수 그래프를 만들 데이터가 없습니다.</div>
+        """
+
+    max_score = max(int(item.get("score", 0) or 0) for item in scored_candidates)
+
+    if max_score <= 0:
+        max_score = 1
+
+    rows = []
+
+    for item in scored_candidates:
+        stock = html.escape(str(item.get("stock", "")))
+        score = int(item.get("score", 0) or 0)
+        width_percent = round((score / max_score) * 100, 1)
+
+        rows.append(
+            f"""
+            <div class="chart-row">
+                <div class="chart-label">{stock}</div>
+                <div class="chart-track">
+                    <div class="bar bar-score" style="width: {width_percent}%;">
+                        {score}점
+                    </div>
+                </div>
+                <div class="chart-percent">{score}</div>
+            </div>
+            """
+        )
+
+    return f"""
+    <div class="chart-box">
+        {''.join(rows)}
+    </div>
+    """
 
 def make_candidate_rows(scored_candidates: list[dict]) -> str:
     if not scored_candidates:
@@ -283,10 +355,65 @@ def generate_dashboard(
             white-space: pre-line;
         }}
 
-        .empty {{
+                .empty {{
             text-align: center;
             color: #888;
             padding: 24px;
+        }}
+
+        .chart-box {{
+            margin-top: 12px;
+        }}
+
+        .chart-row {{
+            display: grid;
+            grid-template-columns: 120px 1fr 70px;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 14px;
+        }}
+
+        .chart-label {{
+            font-weight: bold;
+            color: #333;
+        }}
+
+        .chart-track {{
+            background: #edf2f7;
+            border-radius: 999px;
+            overflow: hidden;
+            height: 30px;
+        }}
+
+        .bar {{
+            height: 30px;
+            line-height: 30px;
+            border-radius: 999px;
+            color: white;
+            font-size: 13px;
+            font-weight: bold;
+            text-align: right;
+            padding-right: 10px;
+            box-sizing: border-box;
+            min-width: 44px;
+        }}
+
+        .bar-up {{
+            background: #1f9d55;
+        }}
+
+        .bar-down {{
+            background: #d64545;
+        }}
+
+        .bar-score {{
+            background: #2563eb;
+        }}
+
+        .chart-percent {{
+            text-align: right;
+            color: #555;
+            font-weight: bold;
         }}
 
         @media (max-width: 900px) {{
@@ -370,6 +497,16 @@ def generate_dashboard(
                     <td>{html.escape(str(market.get("institution_flow", "-")))}</td>
                 </tr>
             </table>
+        </div>
+
+                <div class="section">
+            <h2>시장 흐름 그래프</h2>
+            {make_market_breadth_chart(market)}
+        </div>
+
+        <div class="section">
+            <h2>후보 점수 그래프</h2>
+            {make_candidate_score_chart(scored_candidates)}
         </div>
 
         <div class="section">
